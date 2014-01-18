@@ -8,7 +8,7 @@ using LTtax.Workflow;
 
 namespace ApprovaFlowSimpleWorkflowProcessor.LTtax
 {
-    class WHPayrollImportRecordWF
+    public class WHPayrollImportRecordWF
     {
         public enum Status
         {
@@ -48,14 +48,33 @@ namespace ApprovaFlowSimpleWorkflowProcessor.LTtax
             Replace = 11
         }
 
+        public Status CurrentStatus
+        {
+            get { return m_wf.Status; }
+        }
+
+        public void Fire(Trigger trigger)
+        {
+            m_wf.Fire(trigger);
+        }
+
         protected Workflow<Status, Trigger> m_wf;
 
         protected Workflow<Status, Trigger> InitWF()
         {
-            return InitWF(Status.Init);
+            return DoInitWF(Status.Init);
         }
 
-        protected Workflow<Status, Trigger> InitWF(Status status)
+        public Status Delete { get; set; }
+        public Status MoveRawToDe { get; set; }
+        public Status CheckExistingDe { get; set; }
+        public Status ValidateRaw { get; set; }
+        public Status UploadRaw { get; set; }
+        public Status CheckForRaw { get; set; }
+        public Status CheckForDuplicate { get; set; }
+        public Status CheckFileError { get; set; }
+        
+        private  Workflow<Status, Trigger> DoInitWF(Status status)
         {
             var wf = new Workflow<Status, Trigger>(status);
 
@@ -83,7 +102,7 @@ namespace ApprovaFlowSimpleWorkflowProcessor.LTtax
                 .AutoFire(Trigger.CheckForRaw)
                     .Do(this.CheckForRawData)
                         .Accepts(Status.ImportFailed)
-                        .Accepts(Status.ReadyToImport)
+                        .Accepts(Status.ReadyToUpload)
                         .Accepts(Status.ConfirmAppendReplaceCancel);
 
             wf.Configure(Status.ConfirmAppendReplaceCancel)
@@ -111,7 +130,6 @@ namespace ApprovaFlowSimpleWorkflowProcessor.LTtax
                 .On(Trigger.ContinueAfterRawReports, Status.ImportSucceededWithErrors);
 
             wf.Configure(Status.RawValid)
-                .On(Trigger.ContinueAfterRawReports, Status.RawValid)
                 .On(Trigger.CheckForDE)
                     .Do(this.CheckExistingDataEntry)
                         .Accepts(Status.ImportFailed)
@@ -132,56 +150,65 @@ namespace ApprovaFlowSimpleWorkflowProcessor.LTtax
             return wf;
         }
 
+        public WHPayrollImportRecordWF(
+            Status deleteStatus, 
+            Status moveRawToDe,
+            Status checkExistingDeStatus,
+            Status validateRawStatus,
+            Status uploadRawStatus,
+            Status checkForRawStatus,
+            Status checkForDuplicateStatus,
+            Status checkFileErrorStatus)
+        {
+            Delete = deleteStatus;
+            MoveRawToDe = moveRawToDe;
+            CheckExistingDe = checkExistingDeStatus;
+            ValidateRaw = validateRawStatus;
+            UploadRaw = uploadRawStatus;
+            CheckForRaw = checkForRawStatus;
+            CheckForDuplicate = checkForDuplicateStatus;
+            CheckFileError = checkFileErrorStatus;
+            m_wf = this.InitWF();
+        }
+
         private Status DeleteRawData()
         {
-            throw new NotImplementedException();
+            return this.Delete;
         }
 
         private Status MoveRawToDE()
         {
-            throw new NotImplementedException();
+            return this.MoveRawToDe;
         }
 
         private Status CheckExistingDataEntry()
         {
-            throw new NotImplementedException();
+            return this.CheckExistingDe;
         }
 
         private Status ValidateRawData()
         {
-            throw new NotImplementedException();
+            return this.ValidateRaw;
         }
 
         private Status UploadRawData()
         {
-            throw new NotImplementedException();
+            return this.UploadRaw;
         }
 
         private Status CheckForRawData()
         {
-            throw new NotImplementedException();
+            return this.CheckForRaw;
         }
 
-        protected Status CheckForDuplicates()
+        private Status CheckForDuplicates()
         {
-            throw new NotImplementedException();
+            return this.CheckForDuplicate;
         }
 
-        protected Status CheckFileErrors()
+        private Status CheckFileErrors()
         {
-            try
-            {
-                return Status.ReadyToImport;
-                // entities provider
-                // check file for errors
-            }
-            catch(Exception ex)
-            {
-                return Status.ImportFailed;
-                // log provider
-                // test
-                // 
-            }
+            return this.CheckFileError;
         }
     }
 }

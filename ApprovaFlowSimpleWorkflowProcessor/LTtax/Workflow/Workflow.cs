@@ -93,6 +93,8 @@ namespace LTtax.Workflow
 
             protected TTrigger m_trigger;
 
+            protected TStatus CurrentStatus { get { return m_status; } }
+
             /// <summary>
             /// Registers transition.
             /// </summary>
@@ -213,7 +215,7 @@ namespace LTtax.Workflow
                 /// <returns>Next status.</returns>
                 internal TStatus HandleTransition()
                 {
-                    return m_selection.Transition(m_action());
+                    return m_selection.Transition(m_action(), m_owner.CurrentStatus);
                 }
 
                 /// <summary>
@@ -242,7 +244,6 @@ namespace LTtax.Workflow
                 public class TransitionSelection
                 {
                     protected HashSet<TStatus> m_transitionMap;
-                    protected TStatus m_default;                    
                     protected bool m_isRegistered;
                     protected TransitionAction m_owner;
 
@@ -274,9 +275,10 @@ namespace LTtax.Workflow
                     /// </summary>
                     /// <param name="actionResult">Action result.</param>
                     /// <returns>Transition status.</returns>
-                    internal TStatus Transition(TStatus actionResult)
+                    internal TStatus Transition(TStatus actionResult, TStatus curreStatus)
                     {
-                        Enforce.That(m_transitionMap.Contains(actionResult), "Unhandled transition exception.");
+                        Enforce.That(m_transitionMap.Contains(actionResult),
+                            string.Format("Unhandled transition exception {0} in status {1}.", actionResult.ToString(), curreStatus.ToString()));
 
                         var nextState = actionResult;
 
