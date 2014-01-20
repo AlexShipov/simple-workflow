@@ -47,9 +47,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="EnumTest.cs" />
     <Compile Include="LTWorkflowTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="WHPayrollImportRecordWFTest.cs" />
+    <Compile Include="SimpleWorkflowWizardTest.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ApprovaFlowSimpleWorkflowProcessor\ApprovaFlowSimpleWorkflowProcessor.csproj">

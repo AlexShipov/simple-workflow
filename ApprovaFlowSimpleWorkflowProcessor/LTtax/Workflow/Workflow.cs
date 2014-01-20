@@ -13,7 +13,8 @@ namespace LTtax.Workflow
     {
         protected StateMachine<TStatus, TTrigger> m_machine;
         protected Dictionary<TStatus, HashSet<Transition>> m_transitionMap;
-
+        protected TStatus m_prior;
+        
         protected Workflow<TStatus, TTrigger> RegisterStaticTransition(Transition transition, TStatus fromStatus, TStatus toStatus)
         {
             if (fromStatus.Equals(toStatus))
@@ -42,9 +43,10 @@ namespace LTtax.Workflow
             {
                 Enforce.That(initialStatus != null, "Initial status may not be null.");
             }
-
+            
             m_transitionMap = new Dictionary<TStatus, HashSet<Transition>>();
             m_machine = new StateMachine<TStatus, TTrigger>(initialStatus);
+            m_prior = m_machine.State;
         }
 
         public Transition Configure(TStatus status)
@@ -56,6 +58,14 @@ namespace LTtax.Workflow
             return new Transition(status, this);
         }
 
+        public TStatus PriorStatus
+        {
+            get
+            {
+                return m_prior;
+            }
+        }
+
         public TStatus Status
         {
             get
@@ -64,8 +74,17 @@ namespace LTtax.Workflow
             }
         }
 
+        public IEnumerable<TTrigger> Triggers
+        {
+            get
+            {
+                return m_machine.PermittedTriggers;
+            }
+        }
+
         public Workflow<TStatus, TTrigger> Fire(TTrigger trigger)
         {
+            m_prior = m_machine.State;
             m_machine.Fire(trigger);
             
             // if current state (after trigger fire) has transitions

@@ -300,7 +300,59 @@ namespace TestSuite
             AssertHelper.DoesNotThrow(() => new Workflow<int, string>(0));
 
         }
-        
+
+        [TestMethod]
+        public void WorkflowTriggersTest()
+        {
+            var state1 = "state1";
+            var state2 = "state2";
+            var state3 = "state3";
+            var trigger1 = "trigger1";
+            var trigger2 = "trigger2";
+            var trigger3 = "trigger3";
+
+
+            Func<string> action1 = () => state1;
+            Func<string> action2 = () => state2;
+
+            // 3 triggers 3 states
+            // s1 -> { (t1, a1-> [(42, s3), (101, s1), (true, s2)] ),
+            //         (t2, a2-> [(1, s1), (2, s2)] }
+            // s2 -> { (t3, a-> [("testRetVal", s2), (true, s1)]) }
+            Func<Workflow<string, string>> getWf = () =>
+            {
+                var twf = new Workflow<string, string>(state1);
+                twf.Configure(state1)
+                    .On(trigger1)
+                        .Do(() => state2)
+                            .Accepts(state3)
+                            .Accepts(state1)
+                            .Accepts(state2)
+                    .On(trigger2)
+                        .Do(action2)
+                            .Accepts(state1)
+                            .Accepts(state2);
+                twf.Configure(state2)
+                    .On(trigger3)
+                        .Do(() => "testRetVal")
+                            .Accepts("testRetVal")
+                            .Accepts(state1);
+
+                return twf;
+            };
+
+            var wf = getWf();
+
+            Assert.AreEqual(wf.Triggers.Count(), 2);
+            Assert.IsTrue(wf.Triggers.Any(item => item == trigger1));
+            Assert.IsTrue(wf.Triggers.Any(item => item == trigger2));
+            Assert.IsFalse(wf.Triggers.Any(item => item == trigger3));
+
+            wf.Fire(trigger1);
+            Assert.AreEqual(wf.Status, state2);
+            Assert.AreEqual(wf.Triggers.Count(), 1);
+            Assert.IsTrue(wf.Triggers.Any(item => item == trigger3));
+        }
         
         [TestMethod]        
         public void WorkflowStaticTransitions()
@@ -329,8 +381,10 @@ namespace TestSuite
             wf = new Workflow<string, string>(state1);
             wf.Configure(state1).On(trigger1, state2);
             Assert.AreEqual(state1, wf.Status);
+            Assert.AreEqual(wf.PriorStatus, wf.Status);
             wf.Fire(trigger1);
             Assert.AreEqual(state2, wf.Status);
+            Assert.AreEqual(wf.PriorStatus, state1);
 
             // 3 triggers 3 states
             // s1 -> { (t1-> s2), (t2 -> s3) }
@@ -350,14 +404,17 @@ namespace TestSuite
             wf = getWf();
             wf.Fire(trigger1);
             // test state 2
+            Assert.AreEqual(wf.PriorStatus, state1);
             Assert.AreEqual(state2, wf.Status);
             AssertHelper.Throws<InvalidOperationException>(() => wf.Fire(trigger1));
             AssertHelper.Throws<InvalidOperationException>(() => wf.Fire(trigger2));
 
             wf.Fire(trigger3);
+            Assert.AreEqual(state2, wf.PriorStatus);
             Assert.AreEqual(state1, wf.Status);
 
             wf.Fire(trigger2);
+            Assert.AreEqual(state1, wf.PriorStatus);
             Assert.AreEqual(state3, wf.Status);
 
         }
@@ -410,9 +467,11 @@ namespace TestSuite
                                 .Accepts(state1)
             );
             Assert.AreEqual(state1, wf.Status);
+            Assert.AreEqual(state1, wf.PriorStatus);
             Assert.IsFalse(actionFired);
             wf.Fire(trigger1);
             Assert.AreEqual(state1, wf.Status);
+            Assert.AreEqual(state1, wf.PriorStatus);
             Assert.IsTrue(actionFired);
             
 
@@ -446,12 +505,15 @@ namespace TestSuite
                         
             Assert.AreEqual(state1, wf.Status);
             wf.Fire(trigger2);
+            Assert.AreEqual(state1, wf.PriorStatus);
             Assert.AreEqual(state2, wf.Status);
             wf.Fire(trigger3);
+            Assert.AreEqual(state2, wf.PriorStatus);
             Assert.AreEqual("testRetVal", wf.Status);
                         
             wf = getWf();
-            wf.Fire(trigger2);            
+            wf.Fire(trigger2);
+            Assert.AreEqual(state1, wf.PriorStatus);
             Assert.AreEqual(state2, wf.Status);
          
         }
@@ -522,6 +584,7 @@ namespace TestSuite
             wf = getWf();
             wf.Fire(trigger1);
             Assert.IsTrue(actionFired);
+            Assert.AreEqual(state2, wf.PriorStatus);
             Assert.AreEqual(state3, wf.Status);
             /*   */
         }
