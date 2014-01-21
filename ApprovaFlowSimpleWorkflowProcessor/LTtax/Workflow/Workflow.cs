@@ -1,20 +1,61 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-using Stateless;
-
-using LTtax.Utils;
-
-namespace LTtax.Workflow
+﻿namespace LTtax.Workflow
 {
-    public class Workflow<TStatus, TTrigger>
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+
+    using Stateless;
+    using LTtax.Utils;
+
+    public interface IWorkflow<TStatus, TTrigger>
     {
-        protected StateMachine<TStatus, TTrigger> m_machine;
-        protected Dictionary<TStatus, HashSet<Transition>> m_transitionMap;
-        protected TStatus m_prior;
+        ITransition<TStatus, TTrigger> Configure(TStatus status);
+        TStatus Status { get; }
+        TStatus PriorStatus { get; }
+        IEnumerable<TTrigger> Triggers { get; }
+        IWorkflow<TStatus, TTrigger> Fire(TTrigger trigger);
+    }
+
+    public interface ITransitionSelection<TStatus, TTrigger>
+    {
+        ITransitionSelection<TStatus, TTrigger> Accepts(TStatus status);
+        ITransition<TStatus, TTrigger> On(TTrigger trigger, TStatus status);
+        ITransitionAction<TStatus, TTrigger> On(TTrigger trigger);
+        ITransitionAction<TStatus, TTrigger> AutoFire(TTrigger trigger);
+    }
+
+    public interface ITransitionAction<TStatus, TTrigger>
+    {
+        ITransitionSelection<TStatus, TTrigger> Do(Func<TStatus> action);
+    }
+
+    public interface ITransition<TStatus, TTrigger>
+    {
+        ITransitionAction<TStatus, TTrigger> AutoFire(TTrigger trigger);
+        ITransitionAction<TStatus, TTrigger> On(TTrigger trigger);
+        ITransition<TStatus, TTrigger> On(TTrigger trigger, TStatus status);
+        bool IsAutoFire { get; set; }
+    }
+
+
+    /// <summary>
+    /// Simple workflow class implemented as a state machine.
+    /// </summary>
+    /// <typeparam name="TStatus"></typeparam>
+    /// <typeparam name="TTrigger"></typeparam>
+    public class Workflow<TStatus, TTrigger> : IWorkflow<TStatus, TTrigger>
+    {
+        protected StateMachine<TStatus, TTrigger> m_machine;        // handles transition and state logic
+        protected Dictionary<TStatus, HashSet<Transition>> m_transitionMap; //map of available transitions for a status
+        protected TStatus m_prior; // prior status
         
+        /// <summary>
+        /// Registers transitions as static (internal use only).
+        /// </summary>
+        /// <param name="transition"></param>
+        /// <param name="fromStatus"></param>
+        /// <param name="toStatus"></param>
+        /// <returns></returns>
         protected Workflow<TStatus, TTrigger> RegisterStaticTransition(Transition transition, TStatus fromStatus, TStatus toStatus)
         {
             if (fromStatus.Equals(toStatus))
@@ -28,6 +69,12 @@ namespace LTtax.Workflow
             return this;
         }
 
+        /// <summary>
+        /// Registers a dynamic transition (internal use only).
+        /// </summary>
+        /// <param name="transition"></param>
+        /// <param name="status"></param>
+        /// <returns></returns>
         protected Workflow<TStatus, TTrigger> RegisterDynamicTransition(Transition transition, TStatus status)
         {
             Enforce.That(!transition.IsAutoFire || !m_transitionMap[status].Any(item => item.IsAutoFire), "Status may only contain one auto fire transition.");
@@ -37,6 +84,10 @@ namespace LTtax.Workflow
             return this;
         }
 
+        /// <summary>
+        /// Creates new workflow object and sets its initial status.
+        /// </summary>
+        /// <param name="initialStatus">Initial status.</param>
         public Workflow(TStatus initialStatus)
         {
             if (typeof(TStatus).IsSubclassOf(typeof(object)))
@@ -49,7 +100,12 @@ namespace LTtax.Workflow
             m_prior = m_machine.State;
         }
 
-        public Transition Configure(TStatus status)
+        /// <summary>
+        /// Configures a transition for a given status.
+        /// </summary>
+        /// <param name="status">Status being configured.</param>
+        /// <returns>Transition object that is used to configure the thransition.</returns>
+        public ITransition<TStatus, TTrigger> Configure(TStatus status)
         {
             if (!m_transitionMap.ContainsKey(status))
             {
@@ -58,6 +114,9 @@ namespace LTtax.Workflow
             return new Transition(status, this);
         }
 
+        /// <summary>
+        /// Gets prior status.
+        /// </summary>
         public TStatus PriorStatus
         {
             get
@@ -66,6 +125,9 @@ namespace LTtax.Workflow
             }
         }
 
+        /// <summary>
+        /// Gets current status. 
+        /// </summary>
         public TStatus Status
         {
             get
@@ -74,6 +136,9 @@ namespace LTtax.Workflow
             }
         }
 
+        /// <summary>
+        /// Gets valid triggers for current status.
+        /// </summary>
         public IEnumerable<TTrigger> Triggers
         {
             get
@@ -82,7 +147,12 @@ namespace LTtax.Workflow
             }
         }
 
-        public Workflow<TStatus, TTrigger> Fire(TTrigger trigger)
+        /// <summary>
+        /// Fires trigger on current status.
+        /// </summary>
+        /// <param name="trigger"></param>
+        /// <returns></returns>
+        public IWorkflow<TStatus, TTrigger> Fire(TTrigger trigger)
         {
             m_prior = m_machine.State;
             m_machine.Fire(trigger);
@@ -101,8 +171,8 @@ namespace LTtax.Workflow
             return this;
         }
 
-                
-        public class Transition
+
+        public class Transition : ITransition<TStatus, TTrigger>
         {
             protected Workflow<TStatus, TTrigger> m_owner;
             protected TStatus m_status;
@@ -173,7 +243,7 @@ namespace LTtax.Workflow
             /// </summary>
             /// <param name="trigger">Trigger to be fired automatically.</param>
             /// <returns>Transition action object.</returns>
-            public TransitionAction AutoFire(TTrigger trigger)
+            public ITransitionAction<TStatus, TTrigger> AutoFire(TTrigger trigger)
             {
                 this.IsAutoFire = true;
                 return this.On(trigger);
@@ -184,7 +254,7 @@ namespace LTtax.Workflow
             /// </summary>
             /// <param name="trigger">Transition trigger.</param>
             /// <returns>Transition action object.</returns>
-            public TransitionAction On(TTrigger trigger)
+            public ITransitionAction<TStatus, TTrigger> On(TTrigger trigger)
             {
                 this.DoInit(trigger);
                 return m_action;
@@ -195,7 +265,7 @@ namespace LTtax.Workflow
             /// </summary>
             /// <param name="trigger">Transition Trigger.</param>
             /// <param name="status">Status after transition.</param>
-            public Transition On(TTrigger trigger, TStatus status)
+            public ITransition<TStatus, TTrigger> On(TTrigger trigger, TStatus status)
             {
                 if (typeof(TStatus).IsSubclassOf(typeof(object)))
                 {
@@ -208,7 +278,7 @@ namespace LTtax.Workflow
                 return this.NewTransition();
             }
 
-            public class TransitionAction
+            public class TransitionAction : ITransitionAction<TStatus, TTrigger>
             {
                 protected Func<TStatus> m_action;
                 private Func<TStatus> m_tmpAction;
@@ -242,7 +312,7 @@ namespace LTtax.Workflow
                 /// </summary>
                 /// <param name="action">Action performed when trigger is fired to determine next status.</param>
                 /// <returns></returns>
-                public TransitionSelection Do(Func<TStatus> action)
+                public ITransitionSelection<TStatus, TTrigger> Do(Func<TStatus> action)
                 {
                     Enforce.That(m_action == null, "Action may not be reinitialized.");
                     Enforce.ArgumentNotNull(action, "Null transition action.");
@@ -260,7 +330,7 @@ namespace LTtax.Workflow
                 /// <summary>
                 /// Handles status transitions based on action result.
                 /// </summary>
-                public class TransitionSelection
+                public class TransitionSelection : ITransitionSelection<TStatus, TTrigger>
                 {
                     protected HashSet<TStatus> m_transitionMap;
                     protected bool m_isRegistered;
@@ -317,7 +387,7 @@ namespace LTtax.Workflow
                     /// </summary>                    
                     /// <param name="status">Accepted status.</param>
                     /// <returns></returns>
-                    public TransitionSelection Accepts(TStatus status)
+                    public ITransitionSelection<TStatus, TTrigger> Accepts(TStatus status)
                     {
                         m_transitionMap.Add(status);
                         this.ReisterTransition();
@@ -326,22 +396,21 @@ namespace LTtax.Workflow
                     }
 
                     #region Fluent extensions
-                    public Transition On(TTrigger trigger, TStatus status)
+                    public ITransition<TStatus, TTrigger> On(TTrigger trigger, TStatus status)
                     {
                         return this.NewTransition().On(trigger, status);
                     }
 
-                    public TransitionAction On(TTrigger trigger)
+                    public ITransitionAction<TStatus, TTrigger> On(TTrigger trigger)
                     {
                         return this.NewTransition().On(trigger);
                     }
 
-                    public TransitionAction AutoFire(TTrigger trigger)
+                    public ITransitionAction<TStatus, TTrigger> AutoFire(TTrigger trigger)
                     {
                         return this.NewTransition().AutoFire(trigger);
                     }
                     #endregion
-
                 }
             }
         }

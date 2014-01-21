@@ -8,7 +8,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace TestSuite
 {
 
-    public static class AssertHelper
+    internal static class AssertHelper
     {        
         public static void DoesNotThrow(Action action)
         {
